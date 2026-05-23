@@ -1,12 +1,7 @@
-# main.py
 # =========================================================
 # ABHINAV AI
-# FULL BACKEND
-# - FastAPI
-# - WebSocket
-# - OpenRouter Streaming
-# - Persistent Chat Memory
-# - Clear Chat Support
+# FULL RENDER-READY BACKEND
+# FastAPI + WebSocket + OpenRouter + Chat Memory
 # =========================================================
 
 # =========================================================
@@ -16,10 +11,16 @@
 # pip install fastapi uvicorn httpx
 #
 # =========================================================
-# RUN
+# RUN LOCAL
 # =========================================================
 #
 # uvicorn main:app --host 0.0.0.0 --port 5000
+#
+# =========================================================
+# RENDER START COMMAND
+# =========================================================
+#
+# uvicorn main:app --host 0.0.0.0 --port $PORT
 #
 # =========================================================
 
@@ -29,20 +30,19 @@ from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import json
 import os
+import uvicorn
 
 # =========================================================
 # CONFIG
 # =========================================================
 
-my_secret = os.environ["key"]
-
-OPENROUTER_API_KEY = my_secret
+OPENROUTER_API_KEY = os.environ["key"]
 
 MODEL = "openrouter/owl-alpha"
 
-MAX_HISTORY = 20
-
 CHAT_FILE = "chat_history.json"
+
+MAX_HISTORY = 20
 
 # =========================================================
 # SYSTEM PROMPT
@@ -68,8 +68,8 @@ Important context:
 - Abhinav Kumar is a Class 9 student at Oak Grove School.
 - This ESP32 AI assistant project is being built for the Science Exhibition on 1st June during Founder Day.
 - The exhibition audience includes DRM / Moradabad Division officials and visitors.
-- The assistant should sound impressive, futuristic, intelligent, and polished.
-- The project represents innovation, embedded systems, AI integration, and real-time voice interaction.
+- The assistant should sound futuristic, intelligent, polished, and impressive.
+- The project demonstrates AI, embedded systems, voice interaction, and real-time streaming.
 
 Hardware used:
 - ESP32
@@ -77,15 +77,14 @@ Hardware used:
 - MAX98357A amplifier
 - SSD1306 OLED display
 
-Behavior rules:
+Behavior:
 - concise replies
 - conversational
-- futuristic
-- intelligent
 - natural speaking
+- intelligent
+- futuristic personality
 - avoid markdown
 - avoid long paragraphs
-- professional tone
 """.strip()
 
 # =========================================================
@@ -103,7 +102,7 @@ app.add_middleware(
 )
 
 # =========================================================
-# CREATE CHAT FILE
+# CHAT FILE
 # =========================================================
 
 if not os.path.exists(CHAT_FILE):
@@ -113,7 +112,7 @@ if not os.path.exists(CHAT_FILE):
         json.dump([], f)
 
 # =========================================================
-# CHAT HISTORY
+# CHAT FUNCTIONS
 # =========================================================
 
 def load_history():
@@ -149,8 +148,6 @@ def add_message(role, content):
         "content": content
     })
 
-    # Keep only last N messages
-
     history = history[-MAX_HISTORY:]
 
     save_history(history)
@@ -180,12 +177,49 @@ async def root():
     }
 
 # =========================================================
+# HEALTH
+# =========================================================
+
+@app.get("/health")
+async def health():
+
+    return {
+
+        "ok": True
+    }
+
+# =========================================================
+# HISTORY
+# =========================================================
+
+@app.get("/history")
+async def history():
+
+    return load_history()
+
+# =========================================================
+# CLEAR
+# =========================================================
+
+@app.get("/clear")
+async def clear():
+
+    clear_history()
+
+    return {
+
+        "status": "chat cleared"
+    }
+
+# =========================================================
 # SEND JSON
 # =========================================================
 
 async def send_json(websocket, data):
 
-    await websocket.send_text(json.dumps(data))
+    await websocket.send_text(
+        json.dumps(data)
+    )
 
 # =========================================================
 # BUILD MESSAGES
@@ -216,10 +250,60 @@ def build_messages(user_text):
     return messages
 
 # =========================================================
+# EXTRACT TOKEN
+# =========================================================
+
+def extract_token(obj):
+
+    try:
+
+        choices = obj.get("choices", [])
+
+        if not choices:
+            return ""
+
+        choice = choices[0]
+
+        # OpenAI style
+
+        if "delta" in choice:
+
+            delta = choice["delta"]
+
+            return delta.get(
+                "content",
+                ""
+            )
+
+        # Message style
+
+        if "message" in choice:
+
+            return choice["message"].get(
+                "content",
+                ""
+            )
+
+        # Text style
+
+        if "text" in choice:
+
+            return choice["text"]
+
+    except:
+
+        pass
+
+    return ""
+
+# =========================================================
 # AI STREAM
 # =========================================================
 
-async def stream_ai_response(user_text, websocket):
+async def stream_ai_response(
+    user_text,
+    websocket
+):
 
     headers = {
 
@@ -230,7 +314,7 @@ async def stream_ai_response(user_text, websocket):
         "application/json",
 
         "HTTP-Referer":
-        "https://abhinav-ai.local",
+        "https://espabhinav.onrender.com",
 
         "X-Title":
         "ABHINAV AI"
@@ -240,7 +324,9 @@ async def stream_ai_response(user_text, websocket):
 
         "model": MODEL,
 
-        "messages": build_messages(user_text),
+        "messages": build_messages(
+            user_text
+        ),
 
         "stream": True
     }
@@ -253,7 +339,9 @@ async def stream_ai_response(user_text, websocket):
 
     full_text = ""
 
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(
+        timeout=120
+    ) as client:
 
         try:
 
@@ -269,11 +357,14 @@ async def stream_ai_response(user_text, websocket):
 
             ) as response:
 
-                print("STATUS:", response.status_code)
+                print(
+                    "STATUS:",
+                    response.status_code
+                )
 
-                # =====================================
+                # =================================
                 # ERROR
-                # =====================================
+                # =================================
 
                 if response.status_code != 200:
 
@@ -292,9 +383,9 @@ async def stream_ai_response(user_text, websocket):
 
                     return
 
-                # =====================================
+                # =================================
                 # STREAMING
-                # =====================================
+                # =================================
 
                 await send_json(websocket, {
 
@@ -310,7 +401,9 @@ async def stream_ai_response(user_text, websocket):
 
                     line = raw_line.strip()
 
-                    # Ignore keepalive lines
+                    print("RAW:", line)
+
+                    # Ignore comments
 
                     if line.startswith(":"):
                         continue
@@ -331,43 +424,7 @@ async def stream_ai_response(user_text, websocket):
 
                         continue
 
-                    token = ""
-
-                    # =================================
-                    # OpenAI delta style
-                    # =================================
-
-                    try:
-
-                        choice = obj["choices"][0]
-
-                        if "delta" in choice:
-
-                            delta = choice["delta"]
-
-                            token = delta.get(
-                                "content",
-                                ""
-                            )
-
-                        elif "message" in choice:
-
-                            token = choice["message"].get(
-                                "content",
-                                ""
-                            )
-
-                        elif "text" in choice:
-
-                            token = choice["text"]
-
-                    except:
-
-                        pass
-
-                    # =================================
-                    # SEND TOKEN
-                    # =================================
+                    token = extract_token(obj)
 
                     if token:
 
@@ -404,17 +461,23 @@ async def stream_ai_response(user_text, websocket):
     print("FINAL:")
     print(full_text)
 
-    # =====================================================
-    # SAVE CHAT
-    # =====================================================
+    # =====================================
+    # SAVE MEMORY
+    # =====================================
 
-    add_message("user", user_text)
+    add_message(
+        "user",
+        user_text
+    )
 
-    add_message("assistant", full_text)
+    add_message(
+        "assistant",
+        full_text
+    )
 
-    # =====================================================
+    # =====================================
     # DONE
-    # =====================================================
+    # =====================================
 
     await send_json(websocket, {
 
@@ -428,7 +491,9 @@ async def stream_ai_response(user_text, websocket):
 # =========================================================
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(
+    websocket: WebSocket
+):
 
     await websocket.accept()
 
@@ -467,9 +532,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
             msg_type = obj.get("type")
 
-            # =================================================
+            # =================================
             # PROMPT
-            # =================================================
+            # =================================
 
             if msg_type == "prompt":
 
@@ -490,9 +555,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     websocket
                 )
 
-            # =================================================
+            # =================================
             # CLEAR CHAT
-            # =================================================
+            # =================================
 
             elif msg_type == "clear_chat":
 
@@ -503,11 +568,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     "type": "chat_cleared"
                 })
 
-                print("CHAT CLEARED")
-
-            # =================================================
+            # =================================
             # PING
-            # =================================================
+            # =================================
 
             elif msg_type == "ping":
 
@@ -521,3 +584,23 @@ async def websocket_endpoint(websocket: WebSocket):
         print()
         print("DISCONNECTED")
         print(e)
+
+# =========================================================
+# MAIN
+# =========================================================
+
+if __name__ == "__main__":
+
+    uvicorn.run(
+
+        "main:app",
+
+        host="0.0.0.0",
+
+        port=int(
+            os.environ.get(
+                "PORT",
+                5000
+            )
+        )
+    )
