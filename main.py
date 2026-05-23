@@ -10,6 +10,7 @@ import httpx
 import json
 import os
 import uvicorn
+import re
 
 # =========================================================
 # CONFIG
@@ -37,7 +38,7 @@ Never say you are OpenRouter.
 Never mention models or providers.
 
 If asked who you are, say:
-"I am ABHINAV AI."
+I am ABHINAV AI.
 
 ABHINAV AI was created by Abhinav Kumar.
 
@@ -76,8 +77,13 @@ VERY IMPORTANT:
 - Never use bold or italic formatting.
 - Never use slash-style math expressions.
 - Never use visual formatting styles.
+- Never output URLs.
+- Never output sources.
+- Never output links.
+- Never output markdown links.
+- Never output newline-heavy responses.
 - Output must always be plain readable text only.
-- Instead of saying "10 slash 2", say "10 divided by 2".
+- Instead of saying 10 slash 2, say 10 divided by 2.
 - Explain formulas naturally in words.
 - Speak numbers naturally.
 - Prioritize voice clarity over visual formatting.
@@ -291,20 +297,41 @@ def needs_web_search(text):
 
 def clean_response(text):
 
-    replacements = {
+    # Remove markdown links
 
-        "**": "",
-        "__": "",
-        "###": "",
-        "##": "",
-        "#": "",
-        "*": "",
-        "`": ""
-    }
+    text = re.sub(
+        r'\[([^\]]+)\]\([^)]+\)',
+        r'\1',
+        text
+    )
 
-    for old, new in replacements.items():
+    # Remove URLs
 
-        text = text.replace(old, new)
+    text = re.sub(
+        r'http\S+',
+        '',
+        text
+    )
+
+    # Remove markdown symbols
+
+    text = text.replace("*", "")
+    text = text.replace("#", "")
+    text = text.replace("`", "")
+    text = text.replace("_", "")
+
+    # Remove newlines
+
+    text = text.replace("\n", " ")
+    text = text.replace("\r", " ")
+
+    # Remove extra spaces
+
+    text = re.sub(
+        r'\s+',
+        ' ',
+        text
+    )
 
     return text.strip()
 
