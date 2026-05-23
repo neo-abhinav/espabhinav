@@ -1,27 +1,6 @@
 # =========================================================
 # ABHINAV AI
-# FULL RENDER-READY BACKEND
-# FastAPI + WebSocket + OpenRouter + Chat Memory
-# =========================================================
-
-# =========================================================
-# INSTALL
-# =========================================================
-#
-# pip install fastapi uvicorn httpx
-#
-# =========================================================
-# RUN LOCAL
-# =========================================================
-#
-# uvicorn main:app --host 0.0.0.0 --port 5000
-#
-# =========================================================
-# RENDER START COMMAND
-# =========================================================
-#
-# uvicorn main:app --host 0.0.0.0 --port $PORT
-#
+# FINAL PRODUCTION BACKEND
 # =========================================================
 
 from fastapi import FastAPI, WebSocket
@@ -38,7 +17,7 @@ import uvicorn
 
 OPENROUTER_API_KEY = os.environ["key"]
 
-MODEL = "openrouter/owl-alpha"
+MODEL = "openrouter/free"
 
 CHAT_FILE = "chat_history.json"
 
@@ -53,10 +32,9 @@ You are ABHINAV AI.
 
 Your name is strictly ABHINAV AI.
 
-Never say you are OWL.
 Never say you are ChatGPT.
-Never mention OpenRouter.
-Never mention your underlying model.
+Never say you are OpenRouter.
+Never mention models or providers.
 
 If asked who you are, say:
 "I am ABHINAV AI."
@@ -67,11 +45,10 @@ Important context:
 
 - Abhinav Kumar is a Class 9 student at Oak Grove School.
 - This ESP32 AI assistant project is being built for the Science Exhibition on 1st June during Founder Day.
-- The exhibition audience includes DRM / Moradabad Division officials and visitors.
-- The assistant should sound futuristic, intelligent, polished, and impressive.
-- The project demonstrates AI, embedded systems, voice interaction, and real-time streaming.
+- The audience includes DRM and Moradabad Division officials and visitors.
+- The project demonstrates AI, embedded systems, voice interaction, cloud integration, and real-time streaming.
 
-Hardware used:
+Hardware:
 - ESP32
 - INMP441 microphone
 - MAX98357A amplifier
@@ -80,11 +57,34 @@ Hardware used:
 Behavior:
 - concise replies
 - conversational
-- natural speaking
-- intelligent
 - futuristic personality
-- avoid markdown
+- intelligent
+- natural speaking
+- professional tone
 - avoid long paragraphs
+
+VERY IMPORTANT:
+- Always respond as if the user will HEAR the response through a speaker.
+- Responses must sound natural when spoken aloud.
+- Never use LaTeX.
+- Never use markdown.
+- Never use formatting symbols.
+- Never use asterisks.
+- Never use hashtags.
+- Never use bullet formatting.
+- Never use code block formatting.
+- Never use bold or italic formatting.
+- Never use slash-style math expressions.
+- Never use visual formatting styles.
+- Output must always be plain readable text only.
+- Instead of saying "10 slash 2", say "10 divided by 2".
+- Explain formulas naturally in words.
+- Speak numbers naturally.
+- Prioritize voice clarity over visual formatting.
+- Sound futuristic and polished.
+
+If current or recent information is required,
+use web search automatically.
 """.strip()
 
 # =========================================================
@@ -102,7 +102,7 @@ app.add_middleware(
 )
 
 # =========================================================
-# CHAT FILE
+# CHAT STORAGE
 # =========================================================
 
 if not os.path.exists(CHAT_FILE):
@@ -112,7 +112,7 @@ if not os.path.exists(CHAT_FILE):
         json.dump([], f)
 
 # =========================================================
-# CHAT FUNCTIONS
+# LOAD CHAT
 # =========================================================
 
 def load_history():
@@ -128,6 +128,8 @@ def load_history():
         return []
 
 # =========================================================
+# SAVE CHAT
+# =========================================================
 
 def save_history(history):
 
@@ -135,6 +137,8 @@ def save_history(history):
 
         json.dump(history, f, indent=2)
 
+# =========================================================
+# ADD MESSAGE
 # =========================================================
 
 def add_message(role, content):
@@ -152,6 +156,8 @@ def add_message(role, content):
 
     save_history(history)
 
+# =========================================================
+# CLEAR CHAT
 # =========================================================
 
 def clear_history():
@@ -250,6 +256,59 @@ def build_messages(user_text):
     return messages
 
 # =========================================================
+# CHECK WEB SEARCH
+# =========================================================
+
+def needs_web_search(text):
+
+    text = text.lower()
+
+    keywords = [
+
+        "latest",
+        "today",
+        "current",
+        "news",
+        "recent",
+        "live",
+        "weather",
+        "score",
+        "ipl",
+        "cricket",
+        "headline",
+        "technology update",
+        "trending"
+    ]
+
+    return any(
+        word in text
+        for word in keywords
+    )
+
+# =========================================================
+# CLEAN RESPONSE
+# =========================================================
+
+def clean_response(text):
+
+    replacements = {
+
+        "**": "",
+        "__": "",
+        "###": "",
+        "##": "",
+        "#": "",
+        "*": "",
+        "`": ""
+    }
+
+    for old, new in replacements.items():
+
+        text = text.replace(old, new)
+
+    return text.strip()
+
+# =========================================================
 # EXTRACT TOKEN
 # =========================================================
 
@@ -264,8 +323,6 @@ def extract_token(obj):
 
         choice = choices[0]
 
-        # OpenAI style
-
         if "delta" in choice:
 
             delta = choice["delta"]
@@ -275,16 +332,12 @@ def extract_token(obj):
                 ""
             )
 
-        # Message style
-
         if "message" in choice:
 
             return choice["message"].get(
                 "content",
                 ""
             )
-
-        # Text style
 
         if "text" in choice:
 
@@ -331,6 +384,21 @@ async def stream_ai_response(
         "stream": True
     }
 
+    # =====================================================
+    # WEB SEARCH
+    # =====================================================
+
+    if needs_web_search(user_text):
+
+        payload["tools"] = [
+
+            {
+                "type": "openrouter:web_search"
+            }
+        ]
+
+        print("WEB SEARCH ENABLED")
+
     print()
     print("================================")
     print("USER:", user_text)
@@ -362,9 +430,7 @@ async def stream_ai_response(
                     response.status_code
                 )
 
-                # =================================
                 # ERROR
-                # =================================
 
                 if response.status_code != 200:
 
@@ -383,9 +449,7 @@ async def stream_ai_response(
 
                     return
 
-                # =================================
                 # STREAMING
-                # =================================
 
                 await send_json(websocket, {
 
@@ -401,9 +465,7 @@ async def stream_ai_response(
 
                     line = raw_line.strip()
 
-                    print("RAW:", line)
-
-                    # Ignore comments
+                    # Ignore keepalive
 
                     if line.startswith(":"):
                         continue
@@ -427,6 +489,8 @@ async def stream_ai_response(
                     token = extract_token(obj)
 
                     if token:
+
+                        token = clean_response(token)
 
                         print(
                             token,
@@ -456,14 +520,16 @@ async def stream_ai_response(
 
             return
 
+    full_text = clean_response(full_text)
+
     print()
     print()
     print("FINAL:")
     print(full_text)
 
-    # =====================================
+    # =====================================================
     # SAVE MEMORY
-    # =====================================
+    # =====================================================
 
     add_message(
         "user",
@@ -475,9 +541,9 @@ async def stream_ai_response(
         full_text
     )
 
-    # =====================================
+    # =====================================================
     # DONE
-    # =====================================
+    # =====================================================
 
     await send_json(websocket, {
 
@@ -532,9 +598,9 @@ async def websocket_endpoint(
 
             msg_type = obj.get("type")
 
-            # =================================
+            # =================================================
             # PROMPT
-            # =================================
+            # =================================================
 
             if msg_type == "prompt":
 
@@ -555,9 +621,9 @@ async def websocket_endpoint(
                     websocket
                 )
 
-            # =================================
+            # =================================================
             # CLEAR CHAT
-            # =================================
+            # =================================================
 
             elif msg_type == "clear_chat":
 
@@ -568,9 +634,11 @@ async def websocket_endpoint(
                     "type": "chat_cleared"
                 })
 
-            # =================================
+                print("CHAT CLEARED")
+
+            # =================================================
             # PING
-            # =================================
+            # =================================================
 
             elif msg_type == "ping":
 
