@@ -323,6 +323,8 @@ def extract_token(obj):
 
         choice = choices[0]
 
+        # DELTA FORMAT
+
         if "delta" in choice:
 
             delta = choice["delta"]
@@ -332,12 +334,16 @@ def extract_token(obj):
                 ""
             )
 
+        # MESSAGE FORMAT
+
         if "message" in choice:
 
             return choice["message"].get(
                 "content",
                 ""
             )
+
+        # TEXT FORMAT
 
         if "text" in choice:
 
@@ -490,8 +496,6 @@ async def stream_ai_response(
 
                     if token:
 
-                        token = clean_response(token)
-
                         print(
                             token,
                             end="",
@@ -519,6 +523,10 @@ async def stream_ai_response(
             })
 
             return
+
+    # =====================================================
+    # CLEAN FINAL RESPONSE
+    # =====================================================
 
     full_text = clean_response(full_text)
 
